@@ -91,7 +91,6 @@
     justify-content: center;
     font-weight: 800;
     font-size: 42px;
-    animation: appear 0.15s ease;
   }
 
   @keyframes appear {
@@ -105,8 +104,12 @@
     100% { transform: scale(1); }
   }
 
-  .tile.merge {
-    animation: appear 0.15s ease, pop 0.2s ease 0.15s;
+  .tile.appear {
+    animation: appear 0.15s ease;
+  }
+
+  .tile.pop {
+    animation: pop 0.2s ease;
   }
 
   .tile-2   { background: #eee4da; color: #776e65; }
@@ -242,7 +245,7 @@ class Game {
     if (!empty.length) return;
     const [r, c] = empty[Math.floor(Math.random() * empty.length)];
     const value = Math.random() < 0.9 ? 2 : 4;
-    const tile = { id: ++this.tileId, value, r, c };
+    const tile = { id: ++this.tileId, value, r, c, justPlaced: true };
     this.grid[r][c] = tile;
   }
 
@@ -256,17 +259,21 @@ class Game {
         const el = document.createElement('div');
         const cls = tile.value <= 2048 ? `tile-${tile.value}` : 'tile-super';
         el.className = `tile ${cls}`;
-        el.textContent = tile.value;
         const tileSize = 100;
         el.style.width = tileSize + 'px';
         el.style.height = tileSize + 'px';
         el.style.position = 'absolute';
         el.style.top = r * (tileSize + 12) + 'px';
         el.style.left = c * (tileSize + 12) + 'px';
+        if (tile.justPlaced) {
+          el.classList.add('appear');
+          delete tile.justPlaced;
+        }
         if (tile.merged) {
-          el.classList.add('merge');
+          el.classList.add('pop');
           delete tile.merged;
         }
+        if (!el.textContent) el.textContent = tile.value;
         tilesEl.appendChild(el);
       }
     }

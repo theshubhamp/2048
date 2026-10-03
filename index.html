@@ -190,8 +190,8 @@
     <div class="board" id="board"></div>
     <div class="tile-layer" id="tiles"></div>
     <div class="game-over" id="overlay">
-      <p>Game Over!</p>
-      <button onclick="game.restart()">Try Again</button>
+      <p id="overlay-msg">Game Over!</p>
+      <button id="overlay-btn">Try Again</button>
     </div>
   </div>
   <p class="hint">Use arrow keys or swipe to play</p>
@@ -203,14 +203,37 @@ class Game {
     this.size = 4;
     this.grid = [];
     this.score = 0;
-    this.best = +localStorage.getItem('2048-best') || 0;
+    this.best = this.loadBest();
     this.won = false;
     this.over = false;
     this.tileId = 0;
+    this.overlayAction = null;
 
     document.getElementById('best').textContent = this.best;
     this.init();
     this.bind();
+  }
+
+  loadBest() {
+    try { return +localStorage.getItem('2048-best') || 0; }
+    catch { return 0; }
+  }
+
+  saveBest() {
+    try { localStorage.setItem('2048-best', this.best); }
+    catch { /* storage unavailable */ }
+  }
+
+  showOverlay(msg, btnLabel, action) {
+    document.getElementById('overlay-msg').textContent = msg;
+    document.getElementById('overlay-btn').textContent = btnLabel;
+    this.overlayAction = action;
+    document.getElementById('overlay').classList.add('active');
+  }
+
+  hideOverlay() {
+    document.getElementById('overlay').classList.remove('active');
+    this.overlayAction = null;
   }
 
   init() {
@@ -228,7 +251,7 @@ class Game {
     this.won = false;
     this.over = false;
     document.getElementById('score').textContent = '0';
-    document.getElementById('overlay').classList.remove('active');
+    this.hideOverlay();
     this.place();
     this.place();
     this.render();
@@ -262,6 +285,8 @@ class Game {
       for (let c = 0; c < 4; c++) {
         const tile = this.grid[r][c];
         if (!tile) continue;
+        tile.r = r;
+        tile.c = c;
         const el = document.createElement('div');
         const cls = tile.value <= 2048 ? `tile-${tile.value}` : 'tile-super';
         el.className = `tile ${cls}`;
@@ -278,7 +303,7 @@ class Game {
           el.classList.add('pop');
           delete tile.merged;
         }
-        if (!el.textContent) el.textContent = tile.value;
+        el.textContent = tile.value;
         tilesEl.appendChild(el);
       }
     }
@@ -301,18 +326,18 @@ class Game {
 
     if (this.score > this.best) {
       this.best = this.score;
-      localStorage.setItem('2048-best', this.best);
+      this.saveBest();
       document.getElementById('best').textContent = this.best;
     }
 
     if (!this.won && this.grid.flat().some(t => t && t.value === 2048)) {
       this.won = true;
-      // keep playing — don't block
+      this.showOverlay('You Win!', 'Keep Playing', () => this.hideOverlay());
     }
 
     if (this.empty().length === 0 && !this.canMove()) {
       this.over = true;
-      document.getElementById('overlay').classList.add('active');
+      this.showOverlay('Game Over!', 'Try Again', () => this.restart());
     }
   }
 
@@ -397,20 +422,29 @@ class Game {
   }
 
   bind() {
-    document.addEventListener('keydown', e => {
-      const map = { ArrowUp: 'up', ArrowDown: 'down', ArrowLeft: 'left', ArrowRight: 'right',
-                     w: 'up', s: 'down', a: 'left', d: 'right' };
-      if (map[e.key]) { e.preventDefault(); this.move(map[e.key]); }
+    document.getElementById('overlay-btn').addEventListener('click', () => {
+      if (this.overlayAction) this.overlayAction();
     });
 
-    let sx, sy;
+    window.addEventListener('resize', () => this.render());
+
+    document.addEventListener('keydown', e => {
+      const key = e.key.length === 1 ? e.key.toLowerCase() : e.key;
+      const map = { ArrowUp: 'up', ArrowDown: 'down', ArrowLeft: 'left', ArrowRight: 'right',
+                     w: 'up', s: 'down', a: 'left', d: 'right' };
+      if (map[key]) { e.preventDefault(); this.move(map[key]); }
+    });
+
+    let sx = null, sy = null;
     document.addEventListener('touchstart', e => {
       sx = e.touches[0].clientX; sy = e.touches[0].clientY;
     }, { passive: false });
     document.addEventListener('touchmove', e => { e.preventDefault(); }, { passive: false });
     document.addEventListener('touchend', e => {
+      if (sx === null || sy === null) return;
       const dx = e.changedTouches[0].clientX - sx;
       const dy = e.changedTouches[0].clientY - sy;
+      sx = sy = null;
       if (Math.abs(dx) < 30 && Math.abs(dy) < 30) return;
       if (Math.abs(dx) > Math.abs(dy)) this.move(dx > 0 ? 'right' : 'left');
       else this.move(dy > 0 ? 'down' : 'up');
